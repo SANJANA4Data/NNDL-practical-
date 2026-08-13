@@ -1,0 +1,23 @@
+# Vector Addition
+import numpy as np
+
+vector1 = np.array([13,54,64])
+vector2 = np.array([5,10,15])
+print("Vector 1=",vector1)
+print("Vector 2=",vector2)
+result = vector1 + vector2
+print("Vector Addition =",result)
+
+
+Matrix Multiplication
+import numpy as np
+A = np.array([[1,2],[3,4]])
+B = np.array([[6,4],[8,6]])
+print("Matrix A")
+print(A)
+print("Matrix B")
+print(B)
+C = np.matmul(A,B)
+C = A @ B
+print("Matrix Multiplication")
+print(C)
