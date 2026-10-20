@@ -1,0 +1,141 @@
+
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.datasets import imdb
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Embedding, LSTM, Dense, Dropout
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+
+np.random.seed(21)
+tf.random.set_seed(21)
+
+print("Libraries loaded successfully!")
+
+vocab_limit = 10000
+max_words = 200
+
+(train_reviews, train_labels), (test_reviews, test_labels) = (
+    imdb.load_data(num_words=vocab_limit)
+)
+
+train_reviews = pad_sequences(
+    train_reviews, maxlen=max_words, padding="post", truncating="post"
+)
+
+test_reviews = pad_sequences(
+    test_reviews, maxlen=max_words, padding="post", truncating="post"
+)
+
+print("Training samples:", train_reviews.shape)
+print("Testing samples:", test_reviews.shape)
+
+sentiment_model = Sequential([
+    Embedding(vocab_limit, 128, mask_zero=True),
+    LSTM(64, dropout=0.2),
+    Dense(32, activation="relu"),
+    Dropout(0.3),
+    Dense(1, activation="sigmoid")
+])
+
+sentiment_model.compile(
+    optimizer="adam",
+    loss="binary_crossentropy",
+    metrics=["accuracy"]
+)
+
+sentiment_model.summary()
+
+training_log = sentiment_model.fit(
+    train_reviews,
+    train_labels,
+    epochs=8,
+    batch_size=128,
+    validation_split=0.2,
+    callbacks=[
+        tf.keras.callbacks.EarlyStopping(
+            monitor="val_loss",
+            patience=2,
+            restore_best_weights=True
+        )
+    ],
+    verbose=1
+)
+
+print("Training completed!")
+
+loss_value, accuracy_value = sentiment_model.evaluate(
+    test_reviews, test_labels, verbose=0
+)
+
+print("Test loss:", round(loss_value, 4))
+print("Test accuracy:", round(accuracy_value * 100, 2), "%")
+
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(8, 4))
+plt.plot(training_log.history["accuracy"], label="Training Accuracy")
+plt.plot(training_log.history["val_accuracy"], label="Validation Accuracy")
+plt.xlabel("Epoch")
+plt.ylabel("Accuracy")
+plt.title("LSTM Sentiment Classification Accuracy")
+plt.legend()
+plt.grid()
+plt.show()
+
+word_dictionary = imdb.get_word_index()
+
+def review_to_sequence(review):
+    tokens = review.lower().split()
+    sequence = []
+
+    for token in tokens:
+        token = token.strip(".,!?;:'\"()[]{}")
+        word_id = word_dictionary.get(token)
+
+        if word_id is not None:
+            word_id += 3
+
+            if word_id < vocab_limit:
+                sequence.append(word_id)
+            else:
+                sequence.append(2)
+        else:
+            sequence.append(2)
+
+    return pad_sequences(
+        [sequence],
+        maxlen=max_words,
+        padding="post",
+        truncating="post"
+    )
+
+def analyze_review(review):
+    sequence = review_to_sequence(review)
+    probability = float(
+        sentiment_model.predict(sequence, verbose=0)[0][0]
+    )
+
+    result = "Positive" if probability >= 0.5 else "Negative"
+    confidence = probability if probability >= 0.5 else 1 - probability
+
+    print("Review:", review)
+    print("Predicted sentiment:", result)
+    print("Confidence score:", round(confidence * 100, 2), "%")
+
+sample_reviews = [
+    "This movie was wonderful and the acting was excellent.",
+    "The film was boring and the story was terrible.",
+    "I enjoyed the movie and loved the performances.",
+    "The movie was disappointing and not worth watching."
+]
+
+for review in sample_reviews:
+    analyze_review(review)
+    print("-" * 40)
+
+review = input("Enter a movie review: ")
+
+if review.strip():
+    analyze_review(review)
+else:
+    print("Please enter a valid review.")
