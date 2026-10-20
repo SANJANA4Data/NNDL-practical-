@@ -1,0 +1,143 @@
+
+import numpy as np
+import matplotlib.pyplot as plt
+import tensorflow as tf
+
+from tensorflow.keras.datasets import mnist
+from tensorflow.keras.layers import Input, Dense
+from tensorflow.keras.models import Model
+
+np.random.seed(10)
+tf.random.set_seed(10)
+
+(train_images, _), (test_images, _) = mnist.load_data()
+
+print("Training images:", train_images.shape)
+print("Testing images:", test_images.shape)
+
+# Scale pixel values to the range 0 to 1
+train_images = train_images.astype("float32") / 255.0
+test_images = test_images.astype("float32") / 255.0
+
+# Convert each 28 x 28 image into a 784-element vector
+train_vectors = train_images.reshape(-1, 784)
+test_vectors = test_images.reshape(-1, 784)
+
+print("Training vector shape:", train_vectors.shape)
+print("Testing vector shape:", test_vectors.shape)
+
+# Define the input and compressed dimensions
+input_size = 784
+compressed_size = 32
+
+# Encoder network
+image_input = Input(shape=(input_size,))
+
+layer1 = Dense(128, activation="relu")(image_input)
+layer2 = Dense(64, activation="relu")(layer1)
+compressed = Dense(compressed_size, activation="relu")(layer2)
+
+# Decoder network
+layer3 = Dense(64, activation="relu")(compressed)
+layer4 = Dense(128, activation="relu")(layer3)
+reconstructed = Dense(784, activation="sigmoid")(layer4)
+
+# Create models
+autoencoder_model = Model(image_input, reconstructed)
+encoder_model = Model(image_input, compressed)
+
+autoencoder_model.compile(
+    optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+    loss="binary_crossentropy"
+)
+
+autoencoder_model.summary()
+
+training_results = autoencoder_model.fit(
+    train_vectors,
+    train_vectors,
+    epochs=20,
+    batch_size=256,
+    shuffle=True,
+    validation_data=(test_vectors, test_vectors),
+    verbose=1
+)
+
+print("Autoencoder training completed!")
+
+evaluation_loss = autoencoder_model.evaluate(
+    test_vectors,
+    test_vectors,
+    verbose=0
+)
+
+print("Test reconstruction loss:", round(evaluation_loss, 4))
+
+# Transform the original images into compressed features
+compressed_train = encoder_model.predict(
+    train_vectors, verbose=0
+)
+
+compressed_test = encoder_model.predict(
+    test_vectors, verbose=0
+)
+
+print("Original dimensions:", train_vectors.shape[1])
+print("Compressed dimensions:", compressed_train.shape[1])
+
+print("\nFirst five compressed samples:")
+print(compressed_test[:5])
+
+reconstructed_images = autoencoder_model.predict(
+    test_vectors, verbose=0
+)
+
+mean_squared_error = np.mean(
+    np.square(test_vectors - reconstructed_images)
+)
+
+print("Average reconstruction error:", round(mean_squared_error, 6))
+
+number_of_images = 10
+
+plt.figure(figsize=(16, 4))
+
+for index in range(number_of_images):
+    # Original image
+    plt.subplot(2, number_of_images, index + 1)
+    plt.imshow(test_vectors[index].reshape(28, 28), cmap="gray")
+    plt.title("Original")
+    plt.axis("off")
+
+    # Reconstructed image
+    plt.subplot(2, number_of_images, index + 1 + number_of_images)
+    plt.imshow(
+        reconstructed_images[index].reshape(28, 28),
+        cmap="gray"
+    )
+    plt.title("Reconstructed")
+    plt.axis("off")
+
+plt.tight_layout()
+plt.show()
+
+plt.figure(figsize=(8, 5))
+
+plt.plot(
+    training_results.history["loss"],
+    label="Training Loss"
+)
+
+plt.plot(
+    training_results.history["val_loss"],
+    label="Validation Loss"
+)
+
+plt.xlabel("Epoch")
+plt.ylabel("Binary Cross-Entropy Loss")
+plt.title("Autoencoder Training Performance")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+
