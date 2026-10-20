@@ -1,0 +1,82 @@
+import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
+
+from tensorflow.keras.datasets import mnist
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Flatten
+
+# Load MNIST dataset
+(X_train, y_train), (X_test, y_test) = mnist.load_data()
+
+print("Training Images:", X_train.shape)
+print("Testing Images:", X_test.shape)
+
+# Display one image
+plt.imshow(X_train[0], cmap='gray')
+plt.title("Digit = {}".format(y_train[0]))
+plt.show()
+
+# Normalize pixel values
+X_train = X_train / 255.0
+X_test = X_test / 255.0
+
+# Create Feed-Forward Neural Network
+model = Sequential()
+
+model.add(Flatten(input_shape=(28, 28)))
+model.add(Dense(128, activation='relu'))
+model.add(Dense(64, activation='relu'))
+model.add(Dense(10, activation='softmax'))
+
+# Display model architecture
+model.summary()
+
+# Compile model
+model.compile(
+    optimizer='adam',
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+# Train model
+history = model.fit(
+    X_train,
+    y_train,
+    epochs=25,
+    batch_size=32,
+    validation_split=0.2
+)
+
+# Evaluate model
+loss, accuracy = model.evaluate(X_test, y_test)
+
+print("\nAccuracy:", accuracy)
+
+# Make predictions
+y_pred = model.predict(X_test)
+predicted_classes = np.argmax(y_pred, axis=1)
+
+print("\nPredicted Digits:")
+print(predicted_classes[:20])
+
+print("\nActual Digits:")
+print(y_test[:20])
+
+# Plot training accuracy
+plt.plot(history.history['accuracy'], label='Training Accuracy')
+plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.title('Training and Validation Accuracy')
+plt.legend()
+plt.show()
+
+# Plot training loss
+plt.plot(history.history['loss'], label='Training Loss')
+plt.plot(history.history['val_loss'], label='Validation Loss')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.title('Training and Validation Loss')
+plt.legend()
+plt.show()
