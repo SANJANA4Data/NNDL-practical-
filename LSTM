@@ -1,0 +1,152 @@
+
+import numpy as np
+import matplotlib.pyplot as plt
+import tensorflow as tf
+
+from tensorflow.keras import Model
+from tensorflow.keras.layers import Input, LSTM, RepeatVector, Dense, TimeDistributed
+from sklearn.model_selection import train_test_split
+
+np.random.seed(7)
+tf.random.set_seed(7)
+
+print("Libraries imported successfully.")
+
+# Generate noisy cosine-wave sequences
+total_sequences = 2000
+sequence_length = 20
+
+time_points = np.linspace(0, 2 * np.pi, sequence_length)
+dataset = []
+
+for _ in range(total_sequences):
+    shift = np.random.uniform(-np.pi, np.pi)
+    signal = np.cos(time_points + shift)
+    noise = np.random.normal(0, 0.04, sequence_length)
+    dataset.append(signal + noise)
+
+dataset = np.asarray(dataset, dtype=np.float32)
+dataset = dataset[..., np.newaxis]
+
+print("Dataset dimensions:", dataset.shape)
+
+train_data, test_data = train_test_split(
+    dataset,
+    test_size=0.25,
+    random_state=7
+)
+
+print("Training samples:", train_data.shape[0])
+print("Testing samples:", test_data.shape[0])
+
+compressed_size = 12
+
+input_sequence = Input(shape=(sequence_length, 1))
+
+# Encoder
+encoded_sequence = LSTM(
+    compressed_size,
+    activation="tanh"
+)(input_sequence)
+
+# Decoder
+expanded_sequence = RepeatVector(sequence_length)(
+    encoded_sequence
+)
+
+decoded_sequence = LSTM(
+    compressed_size,
+    activation="tanh",
+    return_sequences=True
+)(expanded_sequence)
+
+reconstructed_sequence = TimeDistributed(
+    Dense(1)
+)(decoded_sequence)
+
+model = Model(input_sequence, reconstructed_sequence)
+
+model.compile(
+    optimizer="adam",
+    loss="mean_squared_error"
+)
+
+model.summary()
+
+training_history = model.fit(
+    train_data,
+    train_data,
+    epochs=25,
+    batch_size=32,
+    validation_split=0.15,
+    shuffle=True,
+    verbose=1
+)
+
+print("Training finished.")
+
+plt.figure(figsize=(8, 4))
+
+plt.plot(training_history.history["loss"], label="Training")
+plt.plot(training_history.history["val_loss"], label="Validation")
+
+plt.title("Autoencoder Learning Curve")
+plt.xlabel("Epochs")
+plt.ylabel("Mean Squared Error")
+plt.legend()
+plt.grid()
+plt.show()
+
+predicted_data = model.predict(test_data, verbose=0)
+
+print("Input dimensions:", test_data.shape)
+print("Output dimensions:", predicted_data.shape)
+
+plt.figure(figsize=(10, 4))
+
+plt.plot(test_data[0, :, 0], label="Actual Sequence")
+plt.plot(
+    predicted_data[0, :, 0],
+    "--",
+    label="Reconstructed Sequence"
+)
+
+plt.title("Sequence Reconstruction")
+plt.xlabel("Time Step")
+plt.ylabel("Signal Value")
+plt.legend()
+plt.grid()
+plt.show()
+
+errors = np.mean(
+    (test_data - predicted_data) ** 2,
+    axis=(1, 2)
+)
+
+print("Average error:", np.mean(errors))
+print("Highest error:", np.max(errors))
+print("Lowest error:", np.min(errors))
+
+cutoff = np.percentile(errors, 95)
+
+detected = errors > cutoff
+
+print("Error threshold:", cutoff)
+print("Potential anomalies:", np.count_nonzero(detected))
+print("Total test sequences:", len(test_data))
+
+plt.figure(figsize=(10, 4))
+
+plt.plot(errors, label="Sequence Error")
+plt.axhline(
+    y=cutoff,
+    linestyle="--",
+    label="Detection Threshold"
+)
+
+plt.title("Anomaly Detection Using Reconstruction Error")
+plt.xlabel("Test Sequence Index")
+plt.ylabel("Mean Squared Error")
+plt.legend()
+plt.grid()
+plt.show()
