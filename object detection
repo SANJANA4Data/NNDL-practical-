@@ -1,0 +1,172 @@
+
+!pip install -q tensorflow-hub opencv-python-headless matplotlib
+
+import tensorflow as tf
+import tensorflow_hub as hub
+import numpy as np
+import cv2
+import matplotlib.pyplot as plt
+
+print("Libraries imported successfully!")
+""
+print("Loading SSD MobileNet V2 model...")
+
+model_url = (
+    "https://tfhub.dev/tensorflow/"
+    "ssd_mobilenet_v2/fpnlite_320x320/1"
+)
+
+detector = hub.load(model_url)
+
+print("Model loaded successfully!")
+
+image_url = (
+    "https://feeds.abplive.com/onecms/images/uploaded-images/"
+    "2022/06/08/cba50dc1f15b89efcce65f6a9ec7350b_original.JPG"
+)
+
+image_path = tf.keras.utils.get_file(
+    fname="sample_image.jpg",
+    origin=image_url
+)
+
+image_bgr = cv2.imread(image_path)
+
+if image_bgr is None:
+    raise ValueError("Unable to load the image. Check the image URL.")
+
+image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+
+plt.figure(figsize=(9, 6))
+plt.imshow(image_rgb)
+plt.title("Original Image")
+plt.axis("off")
+plt.show()
+
+# Prepare the image for the model
+input_image = tf.convert_to_tensor(image_rgb, dtype=tf.uint8)
+input_image = tf.expand_dims(input_image, axis=0)
+
+# Run the detector
+predictions = detector(input_image)
+
+# Convert model outputs to NumPy arrays
+boxes = predictions["detection_boxes"][0].numpy()
+scores = predictions["detection_scores"][0].numpy()
+class_ids = predictions["detection_classes"][0].numpy().astype(int)
+
+num_objects = int(predictions["num_detections"][0].numpy())
+
+print("Detection completed.")
+print("Total model detections:", num_objects)
+
+labels = {
+    1: "Person",
+    2: "Bicycle",
+    3: "Car",
+    4: "Motorcycle",
+    5: "Airplane",
+    6: "Bus",
+    7: "Train",
+    8: "Truck",
+    9: "Boat",
+    10: "Traffic Light",
+    13: "Stop Sign",
+    17: "Cat",
+    18: "Dog",
+    19: "Horse",
+    20: "Sheep",
+    21: "Cow",
+    22: "Elephant",
+    23: "Bear",
+    24: "Zebra",
+    25: "Giraffe",
+    27: "Backpack",
+    32: "Sports Ball",
+    44: "Bottle",
+    62: "Chair",
+    63: "Couch",
+    64: "Potted Plant",
+    67: "Dining Table",
+    72: "TV"
+}
+
+print("Object labels prepared.")
+
+def show_detections(image, boxes, scores, class_ids,
+                    count, threshold=0.5):
+
+    output_image = image.copy()
+    height, width = output_image.shape[:2]
+    detected_count = 0
+
+    for i in range(count):
+        if scores[i] < threshold:
+            continue
+
+        # Convert normalized coordinates to pixels
+        ymin, xmin, ymax, xmax = boxes[i]
+
+        x1 = max(0, int(xmin * width))
+        y1 = max(0, int(ymin * height))
+        x2 = min(width - 1, int(xmax * width))
+        y2 = min(height - 1, int(ymax * height))
+
+        if x2 <= x1 or y2 <= y1:
+            continue
+
+        name = labels.get(
+            class_ids[i], f"Class {class_ids[i]}"
+        )
+        confidence = scores[i] * 100
+        caption = f"{name}: {confidence:.1f}%"
+
+        # Draw bounding rectangle
+        cv2.rectangle(
+            output_image,
+            (x1, y1), (x2, y2),
+            (0, 255, 0), 2
+        )
+
+        # Add label with background
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        (text_w, text_h), baseline = cv2.getTextSize(
+            caption, font, 0.6, 2
+        )
+
+        label_y = max(y1, text_h + 8)
+
+        cv2.rectangle(
+            output_image,
+            (x1, label_y - text_h - 8),
+            (min(width - 1, x1 + text_w + 6), label_y + baseline),
+            (0, 255, 0), -1
+        )
+
+        cv2.putText(
+            output_image,
+            caption,
+            (x1 + 3, label_y - 3),
+            font, 0.6, (0, 0, 0), 2
+        )
+
+        detected_count += 1
+        print(f"{name}: {confidence:.2f}%")
+
+    print("Objects above threshold:", detected_count)
+    return output_image
+
+result_image = show_detections(
+    image_rgb,
+    boxes,
+    scores,
+    class_ids,
+    num_objects,
+    threshold=0.5
+)
+
+plt.figure(figsize=(12, 8))
+plt.imshow(result_image)
+plt.title("SSD MobileNet V2 - Object Detection")
+plt.axis("off")
+plt.show()
